@@ -1,42 +1,53 @@
 import yfinance as yf
 import pandas as pd
 
-def fetch_etf_data(ticker):
+# ดึงข้อมูลจาก yfinance
+def fetch_etf_data(ticker, period='3mo', interval='1d'):
     try:
-        df = yf.download(ticker, period="6mo", interval="1d")
-        df = df.reset_index()
-        df.columns = df.columns.str.capitalize()  # Ensure consistent column names
+        df = yf.download(ticker, period=period, interval=interval)
+        df = df[['Close']].rename(columns={'Close': 'close'})
+        df.dropna(inplace=True)
         return df
     except Exception as e:
         print(f"Error fetching {ticker}: {e}")
         return pd.DataFrame()
 
+# คำนวณอินดิเคเตอร์ทางเทคนิค
 def calculate_technical_indicators(df):
-    df['Ema20'] = df['Close'].ewm(span=20, adjust=False).mean()
-    df['Ema50'] = df['Close'].ewm(span=50, adjust=False).mean()
-    df['Rsi'] = compute_rsi(df['Close'], 14)
-    df['Macd'] = df['Close'].ewm(span=12, adjust=False).mean() - df['Close'].ewm(span=26, adjust=False).mean()
+    df['ema20'] = df['close'].ewm(span=20, adjust=False).mean()
+    df['rsi'] = compute_rsi(df['close'], 14)
     return df
 
-def compute_rsi(series, period):
+# คำนวณ RSI
+def compute_rsi(series, period=14):
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-def generate_signals(df):
-    df['Signal'] = 'HOLD'
-    df.loc[(df['Close'] > df['Ema20']) & (df['Rsi'] > 55) & (df['Macd'] > 0), 'Signal'] = 'BUY'
-    df.loc[(df['Close'] < df['Ema20']) & (df['Rsi'] < 45) & (df['Macd'] < 0), 'Signal'] = 'SELL'
+# ประเมินแนวโน้มตลาดจาก RSI ของ ETF หลัก เช่น SPY
+
+def assess_market_condition(df):
+    rsi = df['rsi'].iloc[-1]
+    if rsi > 60:
+        return "Bullish"
+    elif rsi < 40:
+        return "Bearish"
+    else:
+        return "Neutral"
+
+# สร้างสัญญาณ BUY / SELL
+
+def generate_signals(df, market_status):
+    df['signal'] = 'HOLD'
+    for i in range(1, len(df)):
+        if market_status == "Bullish" and df['close'].iloc[i] > df['ema20'].iloc[i] and df['rsi'].iloc[i] > 50:
+            df.at[i, 'signal'] = 'BUY'
+        elif market_status == "Bearish" and df['close'].iloc[i] < df['ema20'].iloc[i] and df['rsi'].iloc[i] < 50:
+            df.at[i, 'signal'] = 'SELL'
     return df
-
-def get_latest_signal(df):
-    latest_row = df.iloc[-1]
-    return {
-        'Date': latest_row['Date'].strftime('%Y-%m-%d') if 'Date' in latest_row else '-',
-        'Close': round(latest_row['Close'], 2),
-        'Signal': latest_row['Signal'],
-        'RSI': round(latest_row['Rsi'], 2),
-        'MACD': round(latest_row['Macd'], 2),
-    }
+    
