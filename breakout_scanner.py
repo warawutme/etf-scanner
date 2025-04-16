@@ -1,6 +1,5 @@
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 
 def fetch_etf_data(ticker):
     try:
