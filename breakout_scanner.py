@@ -40,4 +40,3 @@ def get_latest_signal(df):
         'RSI': round(latest_row['Rsi'], 2),
         'MACD': round(latest_row['Macd'], 2),
     }
-
