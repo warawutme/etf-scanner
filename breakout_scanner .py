@@ -1,7 +1,5 @@
-
 import pandas as pd
 import yfinance as yf
-import numpy as np
 
 def fetch_etf_data(ticker: str) -> pd.DataFrame:
     try:
@@ -9,13 +7,13 @@ def fetch_etf_data(ticker: str) -> pd.DataFrame:
         if df.empty:
             print(f"ไม่พบข้อมูลสำหรับ {ticker}")
             return pd.DataFrame()
-        return df["Close"].to_frame()
+        return df[["Close"]].dropna()
     except Exception as e:
         print(f"Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or "Close" not in df.columns:
+    if df.empty:
         return df
 
     df = df.copy()
@@ -37,34 +35,29 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df.fillna(0)
 
 def assess_market_condition(df: pd.DataFrame) -> str:
-    required_columns = ["Rsi", "Ema20", "Ema50", "Macd"]
-    missing = [col for col in required_columns if col not in df.columns]
-    if missing:
-        print(f"Missing columns: {missing}")
+    if df.empty or df.shape[0] < 20:
         return "Unknown"
 
-    df = df.fillna(0)
-    recent = df.iloc[-1]
-    rsi_pass = recent["Rsi"] > 55
-    ema_pass = recent["Ema20"] > recent["Ema50"]
-    macd_pass = recent["Macd"] > 0
-
-    cond = sum([rsi_pass, ema_pass, macd_pass])
-    if cond >= 2:
-        return "Bullish"
-    elif cond == 1:
-        return "Neutral"
-    else:
-        return "Bearish"
+    try:
+        rsi_pass = df["Rsi"].iloc[-1] > 55
+        ema_pass = df["Ema20"].iloc[-1] > df["Ema50"].iloc[-1]
+        macd_pass = df["Macd"].iloc[-1] > 0
+        cond = sum([rsi_pass, ema_pass, macd_pass])
+        if cond >= 2:
+            return "Bullish"
+        elif cond == 1:
+            return "Neutral"
+        else:
+            return "Bearish"
+    except Exception as e:
+        print(f"Market Filter Error: {e}")
+        return "Unknown"
 
 def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.DataFrame:
     df = df.copy()
-    required_cols = ["Close", "Ema20", "Rsi", "Macd"]
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column: {col}")
 
-    df = df.dropna(subset=required_cols)
+    # Drop rows with NaN in critical columns
+    df = df.dropna(subset=["Close", "Ema20", "Rsi", "Macd"])
     df["Signal"] = "HOLD"
 
     try:
@@ -78,6 +71,6 @@ def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.Dat
         df.loc[sell_condition, "Signal"] = "SELL"
     except Exception as e:
         print(f"Error generating signals: {e}")
-        raise e
 
     return df
+
