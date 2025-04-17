@@ -18,13 +18,14 @@ try:
     market_df.reset_index(inplace=True)
     market_df.columns.name = None
     market_df['Date'] = pd.to_datetime(market_df['Date'])
+
     market_df = calculate_technical_indicators(market_df)
     market_status = assess_market_condition(market_df)
 except Exception as e:
     market_status = "Unknown"
-    st.warning("⚠️ ไม่สามารถประเมินสภาพตลาดได้")
+    st.warning(f"⚠️ ไม่สามารถประเมินสภาพตลาดได้\n{e}")
 
-# ✅ แสดงสถานะตลาดใน Sidebar
+# ✅ แสดง Market Filter ที่ Sidebar
 st.sidebar.subheader("📈 Market Filter")
 st.sidebar.markdown(f"**Market Status (SPY):** `{market_status}`")
 
@@ -39,7 +40,7 @@ except Exception as e:
     st.error(f"❌ โหลดข้อมูลไม่สำเร็จ: {e}")
     st.stop()
 
-# ✅ คำนวณอินดิเคเตอร์ และ สร้างสัญญาณ
+# ✅ คำนวณอินดิเคเตอร์ และสร้างสัญญาณ
 try:
     df = calculate_technical_indicators(df)
     df = generate_signals(df, market_status)
@@ -47,7 +48,7 @@ except Exception as e:
     st.error(f"❌ คำนวณอินดิเคเตอร์ไม่สำเร็จ: {e}")
     st.stop()
 
-# ✅ แสดงผลสัญญาณล่าสุด
+# ✅ แสดงผลลัพธ์ล่าสุด
 latest = df.iloc[-1]
 
 st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
