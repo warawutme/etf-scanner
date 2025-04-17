@@ -1,67 +1,89 @@
-import streamlit as st
+# ✅ breakout_scanner.py (แก้ไขใหม่ให้ถูกต้อง)
+
 import pandas as pd
 import yfinance as yf
-from breakout_scanner import calculate_technical_indicators, generate_signals, assess_market_condition
 
-st.set_page_config(page_title="Breakout Auto ETF Scanner", layout="wide")
+# ====== ฟังก์ชันดึงข้อมูลจาก yfinance ======
+def fetch_etf_data(ticker):
+    try:
+        df = yf.download(ticker, period="3mo", interval="1d", progress=False)
+        df = df[['Close']].copy()
+        df.dropna(inplace=True)
+        return df
+    except:
+        return pd.DataFrame()
 
-st.markdown("## 📈 Breakout Auto ETF Scanner (YFinance Edition)")
-st.caption("Powered by มาบอย 🐃🔥")
+# ====== คำนวณอินดิเคเตอร์ทางเทคนิค ======
+def calculate_technical_indicators(df):
+    df = df.copy()
+    df['Ema20'] = df['Close'].ewm(span=20, adjust=False).mean()
+    df['Ema50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
-tickers = ['YINN', 'FNGU', 'SOXL', 'FXI', 'EURL', 'TNA', 'GDXU']
-selected_etf = st.selectbox("เลือก ETF", tickers)
+    # RSI แบบ manual calculation
+    delta = df['Close'].diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(14).mean()
+    avg_loss = loss.rolling(14).mean()
+    rs = avg_gain / avg_loss
+    df['Rsi'] = 100 - (100 / (1 + rs))
 
-# ✅ ประเมิน Market Status จาก SPY
-try:
-    market_df = yf.download('SPY', period='3mo', interval='1d', progress=False)
-    market_df = market_df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
-    market_df.reset_index(inplace=True)
-    market_df.columns.name = None
-    market_df['Date'] = pd.to_datetime(market_df['Date'])
-    market_df = calculate_technical_indicators(market_df)
+    # MACD
+    ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['Macd'] = ema_12 - ema_26
 
-    # 🔍 Debug: แสดง DataFrame ล่าสุดของตลาด
-    st.subheader("🔍 Debug: Market Data (SPY)")
-    st.dataframe(market_df.tail(3))
+    df.dropna(inplace=True)
+    return df
 
-    market_status = assess_market_condition(market_df)
-except Exception as e:
-    market_status = "Unknown"
-    st.warning("⚠️ ไม่สามารถประเมินสภาพตลาดได้")
+# ====== ฟังก์ชันสร้างสัญญาณ (รับ market_status ด้วย) ======
+def generate_signals(df, market_status="Bullish"):
+    df = df.copy()
+    df['Signal'] = 'HOLD'
+    try:
+        # เงื่อนไขซื้อ ต้องผ่าน market filter ด้วย
+        buy_condition = (
+            (df['Close'] > df['Ema20']) &
+            (df['Rsi'] > 55) &
+            (df['Macd'] > 0) &
+            (market_status != "Bearish")
+        )
 
-# ✅ แสดงสถานะตลาดใน Sidebar
-st.sidebar.subheader("📈 Market Filter")
-st.sidebar.markdown(f"**Market Status (SPY):** `{market_status}`")
+        # เงื่อนไขขาย
+        sell_condition = (
+            (df['Close'] < df['Ema20']) &
+            (df['Rsi'] < 45) &
+            (df['Macd'] < 0)
+        )
 
-# ✅ ดึงข้อมูล ETF ที่เลือก
-try:
-    df = yf.download(selected_etf, period='3mo', interval='1d', progress=False)
-    df = df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
-    df.reset_index(inplace=True)
-    df.columns.name = None
-    df['Date'] = pd.to_datetime(df['Date'])
-except Exception as e:
-    st.error(f"❌ โหลดข้อมูลไม่สำเร็จ: {e}")
-    st.stop()
+        df.loc[buy_condition, 'Signal'] = 'BUY'
+        df.loc[sell_condition, 'Signal'] = 'SELL'
+    except Exception as e:
+        print("Signal Generation Error:", e)
+    return df
 
-# ✅ คำนวณอินดิเคเตอร์ และ สร้างสัญญาณ
-try:
-    df = calculate_technical_indicators(df)
-    df = generate_signals(df, market_status)
-except Exception as e:
-    st.error(f"❌ คำนวณอินดิเคอร์ไม่สำเร็จ: {e}")
-    st.stop()
+# ====== ฟังก์ชันวิเคราะห์แนวโน้มตลาดจาก SPY/QQQ ======
+def assess_market_condition(df):
+    """
+    วิเคราะห์แนวโน้มตลาดจาก ETF ใหญ่ เช่น SPY หรือ QQQ
+    """
+    try:
+        recent = df.iloc[-1]
+        condition = []
 
-# ✅ แสดงผลสัญญาณล่าสุด
-latest = df.iloc[-1:]
+        if recent['Rsi'] > 55:
+            condition.append('RSI Bullish')
+        if recent['Ema20'] > recent['Ema50']:
+            condition.append('EMA Bullish')
+        if recent['Macd'] > 0:
+            condition.append('MACD Bullish')
 
-st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 🗕️ วันที่: `{latest['Date'].iloc[0].date()}`")
-st.markdown(f"- 📊 สัญญาณ: **{latest['Signal'].iloc[0]}**")
-st.markdown(f"- RSI: `{latest['Rsi'].iloc[0]:.2f}`")
-st.markdown(f"- MACD: `{latest['Macd'].iloc[0]:.2f}`")
-st.markdown(f"- EMA20: `{latest['Ema20'].iloc[0]:.2f}`")
-
-# ✅ ข้อมูลย้อนหลัง
-with st.expander("🔍 ข้อมูลย้อนหลัง"):
-    st.dataframe(df.tail(30), use_container_width=True)
+        if len(condition) >= 2:
+            return "Bullish"
+        elif len(condition) == 1:
+            return "Neutral"
+        else:
+            return "Bearish"
+    except Exception as e:
+        print("Market Condition Error:", e)
+        return "Unknown"
