@@ -60,4 +60,9 @@ st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
 st.markdown(f"- 📅 วันที่: `{latest_date_str}`")
 st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
 st.markdown(f"- RSI: `{float(latest['Rsi']):.2f}`")
-st.markdown(f"- MACD: `{float
+st.markdown(f"- MACD: `{float(latest['Macd']):.2f}`")
+st.markdown(f"- EMA20: `{float(latest['Ema20']):.2f}`")
+
+# ✅ ตารางข้อมูลย้อนหลัง
+with st.expander("🔍 ข้อมูลย้อนหลัง"):
+    st.dataframe(df.tail(30), use_container_width=True)
