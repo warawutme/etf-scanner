@@ -108,3 +108,8 @@ st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30)[["Close", "Ema20", "Rsi", "Macd", "Signal"]], use_container_width=True)
+
+st.sidebar.markdown("---")
+st.sidebar.write("📊 ตัวอย่างข้อมูลตลาด:")
+st.sidebar.dataframe(market_df.tail(3))
+
