@@ -19,6 +19,9 @@ try:
     market_df.columns.name = None
     market_df['Date'] = pd.to_datetime(market_df['Date'])
     market_df = calculate_technical_indicators(market_df)
+    # 🔍 Debug: ตรวจสอบ market_df มีคอลัมน์ครบไหม
+st.subheader("🔍 Debug: Market Data (SPY)")
+st.dataframe(market_df.tail(3))
     market_status = assess_market_condition(market_df)
 except Exception as e:
     market_status = "Unknown"
