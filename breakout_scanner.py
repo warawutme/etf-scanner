@@ -2,24 +2,23 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 
-# ─────────────────────────────────────────────
 def fetch_etf_data(ticker: str) -> pd.DataFrame:
     try:
         df = yf.download(ticker, period="3mo", interval="1d", progress=False)
         if df.empty:
-            print(f"❌ ไม่พบข้อมูลสำหรับ {ticker}")
+            print(f"ไม่พบข้อมูลสำหรับ {ticker}")
             return pd.DataFrame()
-        return df[["Close"]].dropna()
+        return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
     except Exception as e:
-        print(f"⚠️ Error fetching data for {ticker}: {e}")
+        print(f"Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
 
-# ─────────────────────────────────────────────
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
     df = df.copy()
+
     df["Ema20"] = df["Close"].ewm(span=20, adjust=False).mean()
     df["Ema50"] = df["Close"].ewm(span=50, adjust=False).mean()
 
@@ -35,73 +34,75 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ema26 = df["Close"].ewm(span=26, adjust=False).mean()
     df["Macd"] = ema12 - ema26
 
-    # เติม NaN
     for col in ["Ema20", "Ema50", "Rsi", "Macd"]:
         df[col] = df[col].fillna(0)
 
     return df
 
-# ─────────────────────────────────────────────
 def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.DataFrame:
     if df.empty:
         return df
 
     df = df.copy()
+
+    for col in df.columns:
+        df[col] = df[col].fillna(0)
+
     df["Signal"] = "HOLD"
 
     if market_status == "Unknown":
         market_status = "Neutral"
 
     try:
-        buy = (
-            (df["Close"] > df["Ema20"]) &
-            (df["Rsi"] > 55) &
-            (df["Macd"] > 0) &
-            (market_status != "Bearish")
-        )
+        close_gt_ema20 = np.array(df["Close"] > df["Ema20"])
+        rsi_gt_55 = np.array(df["Rsi"] > 55)
+        macd_gt_0 = np.array(df["Macd"] > 0)
 
-        sell = (
-            (df["Close"] < df["Ema20"]) &
-            (df["Rsi"] < 45) &
-            (df["Macd"] < 0)
-        )
+        close_lt_ema20 = np.array(df["Close"] < df["Ema20"])
+        rsi_lt_45 = np.array(df["Rsi"] < 45)
+        macd_lt_0 = np.array(df["Macd"] < 0)
 
-        df.loc[buy, "Signal"] = "BUY"
-        df.loc[sell, "Signal"] = "SELL"
+        buy_indices = np.where(close_gt_ema20 & rsi_gt_55 & macd_gt_0)[0]
+        sell_indices = np.where(close_lt_ema20 & rsi_lt_45 & macd_lt_0)[0]
+
+        if market_status == "Bearish":
+            buy_indices = np.array([])
+
+        if len(buy_indices) > 0:
+            df.iloc[buy_indices, df.columns.get_loc("Signal")] = "BUY"
+        if len(sell_indices) > 0:
+            df.iloc[sell_indices, df.columns.get_loc("Signal")] = "SELL"
+
         return df
 
     except Exception as e:
-        print(f"⚠️ Error in generate_signals: {str(e)}")
-        return df
+        print(f"Error in generate_signals: {str(e)}")
+        raise e
 
-# ─────────────────────────────────────────────
 def assess_market_condition(df: pd.DataFrame) -> str:
     try:
         if df.empty or len(df) < 20:
-            print("⚠️ ข้อมูลไม่พอประเมินตลาด")
             return "Unknown"
 
-        required = ["Rsi", "Ema20", "Ema50", "Macd"]
-        if not all(col in df.columns for col in required):
-            print(f"⚠️ ขาดคอลัมน์ที่จำเป็น: {required}")
+        required_columns = ["Rsi", "Ema20", "Ema50", "Macd"]
+        if not all(col in df.columns for col in required_columns):
             return "Unknown"
 
-        df = df.copy()
-        for col in required:
-            df[col] = df[col].fillna(0)
+        df_clean = df.copy()
+        for col in required_columns:
+            df_clean[col] = df_clean[col].fillna(0)
 
-        last = df.iloc[-1]
+        recent = df_clean.iloc[-1]
 
-        cond = sum([
-            last["Rsi"] > 55,
-            last["Ema20"] > last["Ema50"],
-            last["Macd"] > 0
-        ])
+        rsi_pass = bool(recent["Rsi"] > 55)
+        ema_pass = bool(recent["Ema20"] > recent["Ema50"])
+        macd_pass = bool(recent["Macd"] > 0)
+
+        cond = sum([rsi_pass, ema_pass, macd_pass])
 
         if cond >= 2: return "Bullish"
         if cond == 1: return "Neutral"
         return "Bearish"
-
     except Exception as e:
-        print(f"⚠️ Market Filter Error: {e}")
+        print("Market Filter Error:", e)
         return "Unknown"
