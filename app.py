@@ -60,4 +60,3 @@ st.markdown(f"- EMA20: `{latest['Ema20']:.2f}`")
 # ✅ ข้อมูลย้อนหลัง
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30), use_container_width=True)
-
