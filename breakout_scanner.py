@@ -2,6 +2,9 @@ import pandas as pd
 import yfinance as yf
 
 def fetch_etf_data(ticker: str) -> pd.DataFrame:
+    """
+    ดึง Close price ของ ticker มา 3 เดือน พร้อม DatetimeIndex
+    """
     df = yf.download(ticker, period="3mo", interval="1d", progress=False)
     return df[["Close"]].dropna()
 
@@ -27,30 +30,25 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.DataFrame:
     df = df.copy()
     df["Signal"] = "HOLD"
-    buy  = (df["Close"] > df["Ema20"]) & (df["Rsi"] > 55) & (df["Macd"] > 0) & (market_status != "Bearish")
-    sell = (df["Close"] < df["Ema20"]) & (df["Rsi"] < 45) & (df["Macd"] < 0)
-    df.loc[buy,  "Signal"] = "BUY"
-    df.loc[sell, "Signal"] = "SELL"
+
+    # คำนวณเงื่อนไขสัญญาณ
+    buy_condition  = (df["Close"] > df["Ema20"]) & (df["Rsi"] > 55) & (df["Macd"] > 0)
+    sell_condition = (df["Close"] < df["Ema20"]) & (df["Rsi"] < 45) & (df["Macd"] < 0)
+
+    # ถ้าไม่ Bearish ค่อยให้สัญญาณซื้อ
+    if market_status != "Bearish":
+        df.loc[buy_condition, "Signal"] = "BUY"
+
+    df.loc[sell_condition, "Signal"] = "SELL"
     return df
 
 def assess_market_condition(df: pd.DataFrame) -> str:
     recent = df.iloc[-1]
-
-    # ดึงค่าจาก Series อย่างปลอดภัย
-    rsi   = float(recent["Rsi"])
-    ema20 = float(recent["Ema20"])
-    ema50 = float(recent["Ema50"])
-    macd  = float(recent["Macd"])
-
     cond = sum([
-        rsi > 55,
-        ema20 > ema50,
-        macd > 0,
+        recent["Rsi"]   > 55,
+        recent["Ema20"] > recent["Ema50"],
+        recent["Macd"]  > 0,
     ])
-
-    if cond >= 2:
-        return "Bullish"
-    elif cond == 1:
-        return "Neutral"
-    else:
-        return "Bearish"
+    if cond >= 2: return "Bullish"
+    if cond == 1: return "Neutral"
+    return "Bearish"
