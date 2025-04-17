@@ -14,16 +14,15 @@ selected_etf = st.selectbox("เลือก ETF", tickers)
 
 # ✅ ประเมิน Market Status จาก SPY
 try:
-    market_df = yf.download('SPY', period='3mo', interval='1d', progress=False)
+    market_df = yf.download('SPY', period='6mo', interval='1d', progress=False)
     market_df = market_df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
     market_df.reset_index(inplace=True)
     market_df.columns.name = None
     market_df['Date'] = pd.to_datetime(market_df['Date'])
     market_df = calculate_technical_indicators(market_df)
 
-    # DEBUG ตรวจสอบว่าอินดิเคเตอร์ SPY มีจริงไหม
-    # st.subheader("🔍 Debug: Market Data (SPY)")
-    # st.dataframe(market_df.tail(3))
+    # ✅ ตรวจสอบว่าคอลัมน์ชื่อถูกต้อง
+    assert 'Rsi' in market_df.columns and 'Ema20' in market_df.columns and 'Ema50' in market_df.columns and 'Macd' in market_df.columns
 
     market_status = assess_market_condition(market_df)
 except Exception as e:
@@ -54,16 +53,15 @@ except Exception as e:
     st.stop()
 
 # ✅ แสดงผลสัญญาณล่าสุด
-latest = df.iloc[-1:]  # <-- ต้องเป็น DataFrame 1 แถว
+latest = df.iloc[-1]
 
 st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 📅 วันที่: `{latest['Date'].iloc[0].date()}`")
-st.markdown(f"- 📊 สัญญาณ: **{latest['Signal'].iloc[0]}**")
-st.markdown(f"- RSI: `{latest['Rsi'].iloc[0]:.2f}`")
-st.markdown(f"- MACD: `{latest['Macd'].iloc[0]:.2f}`")
-st.markdown(f"- EMA20: `{latest['Ema20'].iloc[0]:.2f}`")
+st.markdown(f"- 📅 วันที่: `{latest['Date'].date()}`")
+st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
+st.markdown(f"- RSI: `{latest['Rsi']:.2f}`")
+st.markdown(f"- MACD: `{latest['Macd']:.2f}`")
+st.markdown(f"- EMA20: `{latest['Ema20']:.2f}`")
 
 # ✅ ตารางข้อมูลย้อนหลัง
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30), use_container_width=True)
-
