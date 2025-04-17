@@ -19,11 +19,6 @@ try:
     market_df.columns.name = None
     market_df['Date'] = pd.to_datetime(market_df['Date'])
     market_df = calculate_technical_indicators(market_df)
-
-    # 🔍 Debug: แสดง DataFrame ล่าสุดของตลาด
-    st.subheader("🔍 Debug: Market Data (SPY)")
-    st.dataframe(market_df.tail(3))
-
     market_status = assess_market_condition(market_df)
 except Exception as e:
     market_status = "Unknown"
@@ -53,9 +48,15 @@ except Exception as e:
     st.stop()
 
 # ✅ แสดงผลสัญญาณล่าสุด
-latest = df.iloc[-1:]
+latest = df.iloc[-1]
 
 st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 📅 วันที่: `{latest['Date'].iloc[0].date()}`")
-st.markdown(f"- 📊 สัญญาณ: **{latest['Signal'].iloc[0]}**")
-st.markdown(f"- RSI: `{latest['Rsi'].iloc
+st.markdown(f"- 📅 วันที่: `{latest['Date'].date()}`")
+st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
+st.markdown(f"- RSI: `{latest['Rsi']:.2f}`")
+st.markdown(f"- MACD: `{latest['Macd']:.2f}`")
+st.markdown(f"- EMA20: `{latest['Ema20']:.2f}`")
+
+# ✅ ข้อมูลย้อนหลัง
+with st.expander("🔍 ข้อมูลย้อนหลัง"):
+    st.dataframe(df.tail(30), use_container_width=True)
