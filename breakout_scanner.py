@@ -2,23 +2,24 @@ import pandas as pd
 import yfinance as yf
 import numpy as np
 
+# ─────────────────────────────────────────────
 def fetch_etf_data(ticker: str) -> pd.DataFrame:
     try:
         df = yf.download(ticker, period="3mo", interval="1d", progress=False)
         if df.empty:
-            print(f"ไม่พบข้อมูลสำหรับ {ticker}")
+            print(f"❌ ไม่พบข้อมูลสำหรับ {ticker}")
             return pd.DataFrame()
         return df[["Close"]].dropna()
     except Exception as e:
-        print(f"Error fetching data for {ticker}: {e}")
+        print(f"⚠️ Error fetching data for {ticker}: {e}")
         return pd.DataFrame()
 
+# ─────────────────────────────────────────────
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
-        return df.copy()
+        return df
 
     df = df.copy()
-
     df["Ema20"] = df["Close"].ewm(span=20, adjust=False).mean()
     df["Ema50"] = df["Close"].ewm(span=50, adjust=False).mean()
 
@@ -34,66 +35,73 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ema26 = df["Close"].ewm(span=26, adjust=False).mean()
     df["Macd"] = ema12 - ema26
 
-    df.fillna(0, inplace=True)
+    # เติม NaN
+    for col in ["Ema20", "Ema50", "Rsi", "Macd"]:
+        df[col] = df[col].fillna(0)
+
     return df
 
+# ─────────────────────────────────────────────
+def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    df = df.copy()
+    df["Signal"] = "HOLD"
+
+    if market_status == "Unknown":
+        market_status = "Neutral"
+
+    try:
+        buy = (
+            (df["Close"] > df["Ema20"]) &
+            (df["Rsi"] > 55) &
+            (df["Macd"] > 0) &
+            (market_status != "Bearish")
+        )
+
+        sell = (
+            (df["Close"] < df["Ema20"]) &
+            (df["Rsi"] < 45) &
+            (df["Macd"] < 0)
+        )
+
+        df.loc[buy, "Signal"] = "BUY"
+        df.loc[sell, "Signal"] = "SELL"
+        return df
+
+    except Exception as e:
+        print(f"⚠️ Error in generate_signals: {str(e)}")
+        return df
+
+# ─────────────────────────────────────────────
 def assess_market_condition(df: pd.DataFrame) -> str:
     try:
         if df.empty or len(df) < 20:
+            print("⚠️ ข้อมูลไม่พอประเมินตลาด")
             return "Unknown"
 
-        cols = ["Rsi", "Ema20", "Ema50", "Macd"]
-        if not all(col in df.columns for col in cols):
-            print(f"Missing columns: {[col for col in cols if col not in df.columns]}")
+        required = ["Rsi", "Ema20", "Ema50", "Macd"]
+        if not all(col in df.columns for col in required):
+            print(f"⚠️ ขาดคอลัมน์ที่จำเป็น: {required}")
             return "Unknown"
 
-        recent = df.iloc[-1].fillna(0)
+        df = df.copy()
+        for col in required:
+            df[col] = df[col].fillna(0)
 
-        rsi_pass = bool(recent["Rsi"] > 55)
-        ema_pass = bool(recent["Ema20"] > recent["Ema50"])
-        macd_pass = bool(recent["Macd"] > 0)
+        last = df.iloc[-1]
 
-        cond = sum([rsi_pass, ema_pass, macd_pass])
+        cond = sum([
+            last["Rsi"] > 55,
+            last["Ema20"] > last["Ema50"],
+            last["Macd"] > 0
+        ])
 
         if cond >= 2: return "Bullish"
         if cond == 1: return "Neutral"
         return "Bearish"
 
     except Exception as e:
-        print("Market Filter Error:", e)
+        print(f"⚠️ Market Filter Error: {e}")
         return "Unknown"
-
-def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.DataFrame:
-    if df.empty:
-        return df.copy()
-
-    df = df.copy()
-    df.fillna(0, inplace=True)
-    df["Signal"] = "HOLD"
-
-    try:
-        # ปรับให้ใช้ vector แบบตรง ไม่แปลง numpy
-        buy_condition = (
-            (df["Close"] > df["Ema20"]) &
-            (df["Rsi"] > 55) &
-            (df["Macd"] > 0)
-        )
-
-        sell_condition = (
-            (df["Close"] < df["Ema20"]) &
-            (df["Rsi"] < 45) &
-            (df["Macd"] < 0)
-        )
-
-        # ถ้า Bearish ห้ามซื้อ
-        if market_status == "Bearish":
-            df.loc[sell_condition, "Signal"] = "SELL"
-        else:
-            df.loc[buy_condition, "Signal"] = "BUY"
-            df.loc[sell_condition, "Signal"] = "SELL"
-
-        return df
-
-    except Exception as e:
-        print(f"Signal Error: {e}")
-        return df
