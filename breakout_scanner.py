@@ -1,11 +1,7 @@
-# breakout_scanner.py
 import pandas as pd
 import yfinance as yf
 
 def fetch_etf_data(ticker: str) -> pd.DataFrame:
-    """
-    ดึง Close price ของ ticker มา 3 เดือน พร้อม DatetimeIndex
-    """
     df = yf.download(ticker, period="3mo", interval="1d", progress=False)
     return df[["Close"]].dropna()
 
@@ -39,11 +35,22 @@ def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.Dat
 
 def assess_market_condition(df: pd.DataFrame) -> str:
     recent = df.iloc[-1]
+
+    # ดึงค่าจาก Series อย่างปลอดภัย
+    rsi   = float(recent["Rsi"])
+    ema20 = float(recent["Ema20"])
+    ema50 = float(recent["Ema50"])
+    macd  = float(recent["Macd"])
+
     cond = sum([
-        recent["Rsi"]   > 55,
-        recent["Ema20"] > recent["Ema50"],
-        recent["Macd"]  > 0,
+        rsi > 55,
+        ema20 > ema50,
+        macd > 0,
     ])
-    if cond >= 2: return "Bullish"
-    if cond == 1: return "Neutral"
-    return "Bearish"
+
+    if cond >= 2:
+        return "Bullish"
+    elif cond == 1:
+        return "Neutral"
+    else:
+        return "Bearish"
