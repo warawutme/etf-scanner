@@ -69,6 +69,7 @@ def assess_market_condition(df):
         recent = df.iloc[-1]
         condition = []
 
+        # ✅ เปลี่ยนชื่อคอลัมน์ให้ตรงกับอินดิเคเตอร์
         if recent['Rsi'] > 55:
             condition.append('RSI Bullish')
         if recent['Ema20'] > recent['Ema50']:
