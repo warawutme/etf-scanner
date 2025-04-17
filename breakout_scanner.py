@@ -30,6 +30,7 @@ def calculate_technical_indicators(df):
     ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
     ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
     df['Macd'] = ema_12 - ema_26
+
     df.dropna(inplace=True)
     return df
 
