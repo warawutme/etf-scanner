@@ -33,28 +33,33 @@ def calculate_technical_indicators(df):
     df.dropna(inplace=True)
     return df
 
-# ====== ฟังก์ชันสร้างสัญญาณ ======
-def generate_signals(df):
+# ====== ฟังก์ชันสร้างสัญญาณ (พร้อมรับ market_status) ======
+def generate_signals(df, market_status="Bullish"):
     df = df.copy()
     df['Signal'] = 'HOLD'
     try:
-        df.loc[
-            (df['Close'] > df['Ema20']) & 
-            (df['Rsi'] > 55) & 
-            (df['Macd'] > 0),
-            'Signal'
-        ] = 'BUY'
+        # เงื่อนไขซื้อ ต้องผ่าน market filter ด้วย
+        buy_condition = (
+            (df['Close'] > df['Ema20']) &
+            (df['Rsi'] > 55) &
+            (df['Macd'] > 0) &
+            (market_status != "Bearish")
+        )
 
-        df.loc[
-            (df['Close'] < df['Ema20']) & 
-            (df['Rsi'] < 45) & 
-            (df['Macd'] < 0),
-            'Signal'
-        ] = 'SELL'
+        # เงื่อนไขขายปกติ
+        sell_condition = (
+            (df['Close'] < df['Ema20']) &
+            (df['Rsi'] < 45) &
+            (df['Macd'] < 0)
+        )
+
+        df.loc[buy_condition, 'Signal'] = 'BUY'
+        df.loc[sell_condition, 'Signal'] = 'SELL'
     except Exception as e:
         print("Signal Generation Error:", e)
     return df
 
+# ====== ฟังก์ชันวิเคราะห์แนวโน้มตลาดจาก SPY/QQQ ======
 def assess_market_condition(df):
     """
     วิเคราะห์แนวโน้มตลาดจาก ETF ใหญ่ เช่น SPY หรือ QQQ
@@ -75,4 +80,3 @@ def assess_market_condition(df):
         return "Neutral"
     else:
         return "Bearish"
-
