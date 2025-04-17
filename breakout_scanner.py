@@ -1,5 +1,3 @@
-# ✅ breakout_scanner.py (แก้ไขใหม่ให้ถูกต้อง)
-
 import pandas as pd
 import yfinance as yf
 
@@ -33,6 +31,12 @@ def calculate_technical_indicators(df):
     ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
     df['Macd'] = ema_12 - ema_26
 
+    # ทำให้แน่ใจว่าเป็นตัวเลขทั้งหมด
+    df['Rsi'] = pd.to_numeric(df['Rsi'], errors='coerce')
+    df['Macd'] = pd.to_numeric(df['Macd'], errors='coerce')
+    df['Ema20'] = pd.to_numeric(df['Ema20'], errors='coerce')
+    df['Ema50'] = pd.to_numeric(df['Ema50'], errors='coerce')
+
     df.dropna(inplace=True)
     return df
 
@@ -41,7 +45,6 @@ def generate_signals(df, market_status="Bullish"):
     df = df.copy()
     df['Signal'] = 'HOLD'
     try:
-        # เงื่อนไขซื้อ ต้องผ่าน market filter ด้วย
         buy_condition = (
             (df['Close'] > df['Ema20']) &
             (df['Rsi'] > 55) &
@@ -49,7 +52,6 @@ def generate_signals(df, market_status="Bullish"):
             (market_status != "Bearish")
         )
 
-        # เงื่อนไขขาย
         sell_condition = (
             (df['Close'] < df['Ema20']) &
             (df['Rsi'] < 45) &
@@ -64,18 +66,15 @@ def generate_signals(df, market_status="Bullish"):
 
 # ====== ฟังก์ชันวิเคราะห์แนวโน้มตลาดจาก SPY/QQQ ======
 def assess_market_condition(df):
-    """
-    วิเคราะห์แนวโน้มตลาดจาก ETF ใหญ่ เช่น SPY หรือ QQQ
-    """
     try:
         recent = df.iloc[-1]
         condition = []
 
-        if recent['Rsi'] > 55:
+        if pd.to_numeric(recent['Rsi'], errors='coerce') > 55:
             condition.append('RSI Bullish')
-        if recent['Ema20'] > recent['Ema50']:
+        if pd.to_numeric(recent['Ema20'], errors='coerce') > pd.to_numeric(recent['Ema50'], errors='coerce'):
             condition.append('EMA Bullish')
-        if recent['Macd'] > 0:
+        if pd.to_numeric(recent['Macd'], errors='coerce') > 0:
             condition.append('MACD Bullish')
 
         if len(condition) >= 2:
