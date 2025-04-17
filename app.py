@@ -15,7 +15,7 @@ market_filters = ['SPY', 'QQQ']
 selected_etf = st.selectbox("เลือก ETF ที่ต้องการสแกน", tickers)
 selected_market = st.sidebar.selectbox("🔍 ใช้ Market Filter จาก ETF:", market_filters)
 
-# ====== ดึงข้อมูลตลาด (ใช้ SPY หรือ QQQ) ======
+# ====== ดึงข้อมูลตลาด (SPY / QQQ) ======
 try:
     market_df = yf.download(selected_market, period='3mo', interval='1d', progress=False)
     market_df = market_df[['Close']].dropna()
@@ -23,24 +23,23 @@ try:
     market_status = assess_market_condition(market_df)
 except Exception as e:
     market_status = "Unknown"
-    st.sidebar.warning(f"⚠️ ไม่สามารถประเมินสภาพตลาดจาก {selected_market} ได้")
+    st.sidebar.warning(f"⚠️ ไม่สามารถประเมินตลาดจาก {selected_market}")
 
 # ====== แสดงสถานะตลาดใน Sidebar ======
 st.sidebar.subheader("📈 Market Filter")
 st.sidebar.markdown(f"**Market Status ({selected_market}):** `{market_status}`")
 
-# ====== ดึงข้อมูล ETF ที่เลือก ======
+# ====== ดึงข้อมูล ETF ======
 try:
     df = yf.download(selected_etf, period='3mo', interval='1d', progress=False)
-    df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']] if 'Date' in df.columns else df
     df.reset_index(inplace=True)
-    df.columns.name = None
+    df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
     df['Date'] = pd.to_datetime(df['Date'])
 except Exception as e:
-    st.error(f"❌ โหลดข้อมูลไม่สำเร็จ: {e}")
+    st.error(f"❌ โหลดข้อมูล ETF ไม่สำเร็จ: {e}")
     st.stop()
 
-# ====== คำนวณอินดิเคเตอร์ และสร้างสัญญาณ ======
+# ====== คำนวณอินดิเคเตอร์ + สัญญาณ ======
 try:
     df = calculate_technical_indicators(df)
     df = generate_signals(df, market_status)
@@ -48,17 +47,19 @@ except Exception as e:
     st.error(f"❌ คำนวณอินดิเคเตอร์ไม่สำเร็จ: {e}")
     st.stop()
 
-# ====== แสดงผลสัญญาณล่าสุด ======
-latest = df.iloc[-1]
-latest_date = latest['Date'].date() if pd.notnull(latest['Date']) else "ไม่พบวันที่"
+# ====== แสดงผลล่าสุด ======
+latest = df.iloc[-1] if not df.empty else None
 
-st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 📅 วันที่: `{latest_date}`")
-st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
-st.markdown(f"- RSI: `{float(latest['Rsi']):.2f}`")
-st.markdown(f"- MACD: `{float(latest['Macd']):.2f}`")
-st.markdown(f"- EMA20: `{float(latest['Ema20']):.2f}`")
+if latest is not None:
+    st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
+    st.markdown(f"- 📅 วันที่: `{latest['Date'].date() if pd.notnull(latest['Date']) else 'ไม่พบวันที่'}`")
+    st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
+    st.markdown(f"- RSI: `{float(latest['Rsi']):.2f}`")
+    st.markdown(f"- MACD: `{float(latest['Macd']):.2f}`")
+    st.markdown(f"- EMA20: `{float(latest['Ema20']):.2f}`")
+else:
+    st.warning("ไม่พบข้อมูลล่าสุด")
 
-# ====== ตารางข้อมูลย้อนหลัง ======
+# ====== ตารางย้อนหลัง ======
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30), use_container_width=True)
