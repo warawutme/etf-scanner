@@ -115,3 +115,4 @@ with st.expander("🔍 ข้อมูลย้อนหลัง"):
 st.sidebar.markdown("---")
 st.sidebar.write("📊 ตัวอย่างข้อมูลตลาด:")
 st.sidebar.dataframe(market_df.tail(3))
+
