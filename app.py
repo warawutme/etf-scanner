@@ -48,14 +48,14 @@ except Exception as e:
     st.stop()
 
 # ✅ แสดงผลสัญญาณล่าสุด
-latest = df.iloc[-1]
+latest = df.iloc[-1:]
 
 st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 📅 วันที่: `{latest['Date'].date()}`")
-st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
-st.markdown(f"- RSI: `{latest['Rsi']:.2f}`")
-st.markdown(f"- MACD: `{latest['Macd']:.2f}`")
-st.markdown(f"- EMA20: `{latest['Ema20']:.2f}`")
+st.markdown(f"- 📅 วันที่: `{latest['Date'].iloc[0].date()}`")  # ✅ FIXED .date()
+st.markdown(f"- 📊 สัญญาณ: **{latest['Signal'].iloc[0]}**")
+st.markdown(f"- RSI: `{latest['Rsi'].iloc[0]:.2f}`")
+st.markdown(f"- MACD: `{latest['Macd'].iloc[0]:.2f}`")
+st.markdown(f"- EMA20: `{latest['Ema20'].iloc[0]:.2f}`")
 
 # ✅ ข้อมูลย้อนหลัง
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
