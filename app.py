@@ -49,10 +49,14 @@ except Exception as e:
     st.stop()
 
 # ✅ แสดงผลสัญญาณล่าสุด
-latest = df.iloc[-1]  # <-- ใช้ Series แถวเดียว
+latest = df.iloc[-1]  # ใช้ Series 1 แถว
+try:
+    latest_date = pd.to_datetime(latest['Date']).date()
+except Exception:
+    latest_date = "ไม่พบวันที่"
 
 st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 📅 วันที่: `{latest['Date'].date()}`")
+st.markdown(f"- 📅 วันที่: `{latest_date}`")
 st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
 st.markdown(f"- RSI: `{latest['Rsi']:.2f}`")
 st.markdown(f"- MACD: `{latest['Macd']:.2f}`")
@@ -61,4 +65,5 @@ st.markdown(f"- EMA20: `{latest['Ema20']:.2f}`")
 # ✅ ตารางข้อมูลย้อนหลัง
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30), use_container_width=True)
+
 
