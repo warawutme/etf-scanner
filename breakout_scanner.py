@@ -58,32 +58,21 @@ def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.Dat
         market_status = "Neutral"
     
     try:
-        # สร้างเงื่อนไขพื้นฐาน ใช้ method .align() เพื่อจัดการปัญหา index alignment
-        close_col, ema20_col = df["Close"].align(df["Ema20"])
-        close_col, rsi_col = df["Close"].align(df["Rsi"])
-        close_col, macd_col = df["Close"].align(df["Macd"])
-        
-        # ตรวจสอบขนาดของข้อมูลว่าตรงกันหรือไม่
-        if len(close_col) != len(ema20_col) or len(close_col) != len(rsi_col) or len(close_col) != len(macd_col):
-            print("Warning: Data lengths don't match after alignment")
-            print(f"Close: {len(close_col)}, EMA20: {len(ema20_col)}, RSI: {len(rsi_col)}, MACD: {len(macd_col)}")
-        
-        # สร้างเงื่อนไขซื้อ
-        buy_condition = (close_col > ema20_col) & (rsi_col > 55) & (macd_col > 0)
+        # วิธีง่ายกว่าคือใช้เงื่อนไขโดยตรงกับ DataFrame หลังจากที่ได้ทำ dropna() แล้ว
+        # ใช้เงื่อนไขพื้นฐานเพื่อระบุ buy/sell signals
+        buy_condition = (df["Close"] > df["Ema20"]) & (df["Rsi"] > 55) & (df["Macd"] > 0)
+        sell_condition = (df["Close"] < df["Ema20"]) & (df["Rsi"] < 45) & (df["Macd"] < 0)
         
         # ปรับเงื่อนไขตาม market_status
         if market_status == "Bearish":
             # ไม่ซื้อในตลาดขาลง
-            buy = buy_condition & pd.Series(False, index=buy_condition.index)
+            buy = pd.Series(False, index=df.index)
         else:
             buy = buy_condition
         
-        # เงื่อนไขขาย
-        sell = (close_col < ema20_col) & (rsi_col < 45) & (macd_col < 0)
-        
         # กำหนดสัญญาณ
-        df.loc[buy.index[buy], "Signal"] = "BUY"
-        df.loc[sell.index[sell], "Signal"] = "SELL"
+        df.loc[buy, "Signal"] = "BUY"
+        df.loc[sell_condition, "Signal"] = "SELL"
         
         return df
     
