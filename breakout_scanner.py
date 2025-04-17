@@ -38,39 +38,59 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ema26 = close.ewm(span=26, adjust=False).mean()
     df["Macd"] = ema12 - ema26
     
-    return df.dropna()
+    # ลบแถวที่มี NaN ออกไปก่อนส่งผลลัพธ์ (ป้องกันปัญหา alignment)
+    df = df.dropna()
+    
+    return df
 
 def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.DataFrame:
     if df.empty:
         return df
-        
-    df = df.copy()
+    
+    # สร้าง copy และตรวจสอบให้แน่ใจว่าไม่มี NaN 
+    df = df.copy().dropna()
+    
+    # กำหนดค่าเริ่มต้น
     df["Signal"] = "HOLD"
     
     # จัดการกับค่า Unknown
     if market_status == "Unknown":
         market_status = "Neutral"
     
-    # สร้างเงื่อนไขพื้นฐาน
-    buy_condition = (df["Close"] > df["Ema20"]) & (df["Rsi"] > 55) & (df["Macd"] > 0)
+    try:
+        # สร้างเงื่อนไขพื้นฐาน ใช้ method .align() เพื่อจัดการปัญหา index alignment
+        close_col, ema20_col = df["Close"].align(df["Ema20"])
+        close_col, rsi_col = df["Close"].align(df["Rsi"])
+        close_col, macd_col = df["Close"].align(df["Macd"])
+        
+        # ตรวจสอบขนาดของข้อมูลว่าตรงกันหรือไม่
+        if len(close_col) != len(ema20_col) or len(close_col) != len(rsi_col) or len(close_col) != len(macd_col):
+            print("Warning: Data lengths don't match after alignment")
+            print(f"Close: {len(close_col)}, EMA20: {len(ema20_col)}, RSI: {len(rsi_col)}, MACD: {len(macd_col)}")
+        
+        # สร้างเงื่อนไขซื้อ
+        buy_condition = (close_col > ema20_col) & (rsi_col > 55) & (macd_col > 0)
+        
+        # ปรับเงื่อนไขตาม market_status
+        if market_status == "Bearish":
+            # ไม่ซื้อในตลาดขาลง
+            buy = buy_condition & pd.Series(False, index=buy_condition.index)
+        else:
+            buy = buy_condition
+        
+        # เงื่อนไขขาย
+        sell = (close_col < ema20_col) & (rsi_col < 45) & (macd_col < 0)
+        
+        # กำหนดสัญญาณ
+        df.loc[buy.index[buy], "Signal"] = "BUY"
+        df.loc[sell.index[sell], "Signal"] = "SELL"
+        
+        return df
     
-    # ปรับเงื่อนไขตาม market_status
-    if market_status == "Bearish":
-        # ไม่มีสัญญาณซื้อในตลาดขาลง
-        buy = buy_condition & False
-    elif market_status == "Neutral":
-        # ตลาด Neutral ใช้เงื่อนไขปกติ
-        buy = buy_condition
-    else:  # Bullish
-        # ตลาดขาขึ้น ใช้เงื่อนไขปกติ
-        buy = buy_condition
-    
-    sell = (df["Close"] < df["Ema20"]) & (df["Rsi"] < 45) & (df["Macd"] < 0)
-    
-    df.loc[buy, "Signal"] = "BUY"
-    df.loc[sell, "Signal"] = "SELL"
-    
-    return df
+    except Exception as e:
+        # แสดงข้อความและส่งต่อ exception เพื่อให้ app.py จัดการ
+        print(f"Error in generate_signals: {e}")
+        raise e
 
 def assess_market_condition(df: pd.DataFrame) -> str:
     try:
@@ -86,7 +106,13 @@ def assess_market_condition(df: pd.DataFrame) -> str:
             print(f"Missing columns for market condition assessment: {missing}")
             return "Unknown"
         
-        recent = df.iloc[-1]
+        # ทำให้แน่ใจว่าไม่มี NaN ในข้อมูล
+        df_clean = df.dropna()
+        if df_clean.empty:
+            print("All data contain NaN values")
+            return "Unknown"
+        
+        recent = df_clean.iloc[-1]
         
         # ตรวจสอบว่าค่าไม่ใช่ NaN
         if pd.isna(recent["Rsi"]) or pd.isna(recent["Ema20"]) or pd.isna(recent["Ema50"]) or pd.isna(recent["Macd"]):
