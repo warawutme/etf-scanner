@@ -33,7 +33,7 @@ def calculate_technical_indicators(df):
     df.dropna(inplace=True)
     return df
 
-# ====== ฟังก์ชันสร้างสัญญาณ (พร้อมรับ market_status) ======
+# ====== ฟังก์ชันสร้างสัญญาณ (รับ market_status ด้วย) ======
 def generate_signals(df, market_status="Bullish"):
     df = df.copy()
     df['Signal'] = 'HOLD'
@@ -46,7 +46,7 @@ def generate_signals(df, market_status="Bullish"):
             (market_status != "Bearish")
         )
 
-        # เงื่อนไขขายปกติ
+        # เงื่อนไขขาย
         sell_condition = (
             (df['Close'] < df['Ema20']) &
             (df['Rsi'] < 45) &
@@ -64,19 +64,23 @@ def assess_market_condition(df):
     """
     วิเคราะห์แนวโน้มตลาดจาก ETF ใหญ่ เช่น SPY หรือ QQQ
     """
-    recent = df.iloc[-1]
-    condition = []
+    try:
+        recent = df.iloc[-1]
+        condition = []
 
-    if recent['rsi'] > 55:
-        condition.append('RSI Bullish')
-    if recent['ema20'] > recent['ema50']:
-        condition.append('EMA Bullish')
-    if recent['macd'] > 0:
-        condition.append('MACD Bullish')
+        if recent['Rsi'] > 55:
+            condition.append('RSI Bullish')
+        if recent['Ema20'] > recent['Ema50']:
+            condition.append('EMA Bullish')
+        if recent['Macd'] > 0:
+            condition.append('MACD Bullish')
 
-    if len(condition) >= 2:
-        return "Bullish"
-    elif len(condition) == 1:
-        return "Neutral"
-    else:
-        return "Bearish"
+        if len(condition) >= 2:
+            return "Bullish"
+        elif len(condition) == 1:
+            return "Neutral"
+        else:
+            return "Bearish"
+    except Exception as e:
+        print("Market Condition Error:", e)
+        return "Unknown"
