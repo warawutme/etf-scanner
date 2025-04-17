@@ -26,6 +26,7 @@ with st.sidebar.status("กำลังโหลดข้อมูลตลา�
     else:
         try:
             market_df = calculate_technical_indicators(market_df)
+            market_df = market_df.dropna()  # ✅ ป้องกันปัญหา operands misaligned
             market_status = assess_market_condition(market_df)
         except Exception as e:
             st.sidebar.error(f"⚠️ เกิดข้อผิดพลาด: {str(e)}")
@@ -46,6 +47,7 @@ with st.status("📥 กำลังโหลดข้อมูล ETF..."):
 
     try:
         df = calculate_technical_indicators(df)
+        df = df.dropna()  # ✅ ป้องกัน Signal คำนวณพัง
         df = generate_signals(df, market_status)
         df = df.dropna()
     except Exception as e:
@@ -81,7 +83,7 @@ with col3:
 
 # ─── Graph Section ────────────────────────────────────
 st.subheader("📊 กราฟราคาและตัวชี้วัด")
-fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                    vertical_spacing=0.05, row_heights=[0.7, 0.3])
 
 fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="ราคาปิด",
@@ -109,7 +111,7 @@ st.plotly_chart(fig, use_container_width=True)
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30)[["Close", "Ema20", "Rsi", "Macd", "Signal"]], use_container_width=True)
 
+# ─── DEBUG MARKET ─────────────────────────────────────
 st.sidebar.markdown("---")
 st.sidebar.write("📊 ตัวอย่างข้อมูลตลาด:")
 st.sidebar.dataframe(market_df.tail(3))
-
