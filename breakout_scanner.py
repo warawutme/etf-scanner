@@ -1,5 +1,6 @@
 import pandas as pd
 import yfinance as yf
+import numpy as np
 
 def fetch_etf_data(ticker: str) -> pd.DataFrame:
     try:
@@ -17,15 +18,13 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         return df
         
     df = df.copy()
-    # ดึงคอลัมน์ Close ออกมาก่อนเพื่อป้องกันปัญหา
-    close = df["Close"]
     
     # คำนวณ EMA
-    df["Ema20"] = close.ewm(span=20, adjust=False).mean()
-    df["Ema50"] = close.ewm(span=50, adjust=False).mean()
+    df["Ema20"] = df["Close"].ewm(span=20, adjust=False).mean()
+    df["Ema50"] = df["Close"].ewm(span=50, adjust=False).mean()
     
     # คำนวณ RSI
-    delta = close.diff()
+    delta = df["Close"].diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
     avg_gain = gain.rolling(14).mean()
@@ -34,12 +33,13 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["Rsi"] = 100 - (100 / (1 + rs))
     
     # คำนวณ MACD
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
+    ema12 = df["Close"].ewm(span=12, adjust=False).mean()
+    ema26 = df["Close"].ewm(span=26, adjust=False).mean()
     df["Macd"] = ema12 - ema26
     
-    # ลบแถวที่มี NaN ออกไปก่อนส่งผลลัพธ์ (ป้องกันปัญหา alignment)
-    df = df.dropna()
+    # ใช้ fillna เพื่อเติมค่า NaN ด้วยค่าที่เหมาะสม
+    for col in ["Ema20", "Ema50", "Rsi", "Macd"]:
+        df[col] = df[col].fillna(0)
     
     return df
 
@@ -47,8 +47,13 @@ def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.Dat
     if df.empty:
         return df
     
-    # สร้าง copy และตรวจสอบให้แน่ใจว่าไม่มี NaN 
-    df = df.copy().dropna()
+    # สร้าง copy
+    df = df.copy()
+    
+    # เติมค่า NaN ทั้งหมดเพื่อแก้ปัญหา alignment
+    for col in df.columns:
+        if df[col].isna().any():
+            df[col] = df[col].fillna(0)
     
     # กำหนดค่าเริ่มต้น
     df["Signal"] = "HOLD"
@@ -58,27 +63,34 @@ def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.Dat
         market_status = "Neutral"
     
     try:
-        # วิธีง่ายกว่าคือใช้เงื่อนไขโดยตรงกับ DataFrame หลังจากที่ได้ทำ dropna() แล้ว
-        # ใช้เงื่อนไขพื้นฐานเพื่อระบุ buy/sell signals
-        buy_condition = (df["Close"] > df["Ema20"]) & (df["Rsi"] > 55) & (df["Macd"] > 0)
-        sell_condition = (df["Close"] < df["Ema20"]) & (df["Rsi"] < 45) & (df["Macd"] < 0)
+        # วิธีที่ปลอดภัยที่สุดคือแปลงเงื่อนไขเป็น numpy array แล้วค่อยนำกลับมาใช้
+        # สร้างเงื่อนไขพื้นฐาน
+        close_gt_ema20 = np.array(df["Close"] > df["Ema20"])
+        rsi_gt_55 = np.array(df["Rsi"] > 55)
+        macd_gt_0 = np.array(df["Macd"] > 0)
         
-        # ปรับเงื่อนไขตาม market_status
+        close_lt_ema20 = np.array(df["Close"] < df["Ema20"])
+        rsi_lt_45 = np.array(df["Rsi"] < 45)
+        macd_lt_0 = np.array(df["Macd"] < 0)
+        
+        # รวมเงื่อนไข
+        buy_indices = np.where(close_gt_ema20 & rsi_gt_55 & macd_gt_0)[0]
+        sell_indices = np.where(close_lt_ema20 & rsi_lt_45 & macd_lt_0)[0]
+        
+        # ถ้าตลาดเป็น Bearish ไม่มีสัญญาณซื้อ
         if market_status == "Bearish":
-            # ไม่ซื้อในตลาดขาลง
-            buy = pd.Series(False, index=df.index)
-        else:
-            buy = buy_condition
+            buy_indices = np.array([])
         
-        # กำหนดสัญญาณ
-        df.loc[buy, "Signal"] = "BUY"
-        df.loc[sell_condition, "Signal"] = "SELL"
+        # ใส่สัญญาณ
+        if len(buy_indices) > 0:
+            df.iloc[buy_indices, df.columns.get_loc("Signal")] = "BUY"
+        if len(sell_indices) > 0:
+            df.iloc[sell_indices, df.columns.get_loc("Signal")] = "SELL"
         
         return df
     
     except Exception as e:
-        # แสดงข้อความและส่งต่อ exception เพื่อให้ app.py จัดการ
-        print(f"Error in generate_signals: {e}")
+        print(f"Error in generate_signals: {str(e)}")
         raise e
 
 def assess_market_condition(df: pd.DataFrame) -> str:
@@ -95,18 +107,12 @@ def assess_market_condition(df: pd.DataFrame) -> str:
             print(f"Missing columns for market condition assessment: {missing}")
             return "Unknown"
         
-        # ทำให้แน่ใจว่าไม่มี NaN ในข้อมูล
-        df_clean = df.dropna()
-        if df_clean.empty:
-            print("All data contain NaN values")
-            return "Unknown"
+        # เติมค่า NaN เพื่อป้องกันปัญหา
+        df_clean = df.copy()
+        for col in required_columns:
+            df_clean[col] = df_clean[col].fillna(0)
         
         recent = df_clean.iloc[-1]
-        
-        # ตรวจสอบว่าค่าไม่ใช่ NaN
-        if pd.isna(recent["Rsi"]) or pd.isna(recent["Ema20"]) or pd.isna(recent["Ema50"]) or pd.isna(recent["Macd"]):
-            print("Some technical indicators contain NaN values")
-            return "Unknown"
         
         # คำนวณสถานะตลาด
         rsi_pass = bool(recent["Rsi"] > 55)
