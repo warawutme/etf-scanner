@@ -19,7 +19,15 @@ try:
     market_df.reset_index(inplace=True)
     market_df.columns.name = None
     market_df['Date'] = pd.to_datetime(market_df['Date'])
+
     market_df = calculate_technical_indicators(market_df)
+    
+    # แปลงให้แน่ใจว่าอินดิเคเตอร์เป็นตัวเลข
+    market_df['Rsi'] = pd.to_numeric(market_df['Rsi'], errors='coerce')
+    market_df['Macd'] = pd.to_numeric(market_df['Macd'], errors='coerce')
+    market_df['Ema20'] = pd.to_numeric(market_df['Ema20'], errors='coerce')
+    market_df['Ema50'] = pd.to_numeric(market_df['Ema50'], errors='coerce')
+
     market_status = assess_market_condition(market_df)
 except Exception as e:
     market_status = "Unknown"
@@ -44,19 +52,21 @@ except Exception as e:
 try:
     df = calculate_technical_indicators(df)
     df = generate_signals(df, market_status)
+
+    # แปลงให้แน่ใจว่าค่าเป็น float
+    df['Rsi'] = pd.to_numeric(df['Rsi'], errors='coerce')
+    df['Macd'] = pd.to_numeric(df['Macd'], errors='coerce')
+    df['Ema20'] = pd.to_numeric(df['Ema20'], errors='coerce')
 except Exception as e:
     st.error(f"❌ คำนวณอินดิเคเตอร์ไม่สำเร็จ: {e}")
     st.stop()
 
 # ✅ แสดงผลสัญญาณล่าสุด
-latest = df.iloc[-1]  # ใช้ Series 1 แถว
-try:
-    latest_date = pd.to_datetime(latest['Date']).date()
-except Exception:
-    latest_date = "ไม่พบวันที่"
+latest = df.iloc[-1]
+latest_date = pd.to_datetime(latest['Date'], errors='coerce')
 
 st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
-st.markdown(f"- 📅 วันที่: `{latest_date}`")
+st.markdown(f"- 📅 วันที่: `{latest_date.date() if pd.notnull(latest_date) else 'ไม่พบวันที่'}`")
 st.markdown(f"- 📊 สัญญาณ: **{latest['Signal']}**")
 st.markdown(f"- RSI: `{latest['Rsi']:.2f}`")
 st.markdown(f"- MACD: `{latest['Macd']:.2f}`")
@@ -65,5 +75,4 @@ st.markdown(f"- EMA20: `{latest['Ema20']:.2f}`")
 # ✅ ตารางข้อมูลย้อนหลัง
 with st.expander("🔍 ข้อมูลย้อนหลัง"):
     st.dataframe(df.tail(30), use_container_width=True)
-
 
