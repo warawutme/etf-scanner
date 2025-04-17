@@ -54,3 +54,25 @@ def generate_signals(df):
     except Exception as e:
         print("Signal Generation Error:", e)
     return df
+
+def assess_market_condition(df):
+    """
+    วิเคราะห์แนวโน้มตลาดจาก ETF ใหญ่ เช่น SPY หรือ QQQ
+    """
+    recent = df.iloc[-1]
+    condition = []
+
+    if recent['rsi'] > 55:
+        condition.append('RSI Bullish')
+    if recent['ema20'] > recent['ema50']:
+        condition.append('EMA Bullish')
+    if recent['macd'] > 0:
+        condition.append('MACD Bullish')
+
+    if len(condition) >= 2:
+        return "Bullish"
+    elif len(condition) == 1:
+        return "Neutral"
+    else:
+        return "Bearish"
+
