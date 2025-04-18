@@ -1,72 +1,115 @@
 import streamlit as st
-from breakout_scanner import analyze_ticker, evaluate_market
-
-# ตั้งค่าหน้าหลักของแอป
-st.set_page_config(page_title="Breakout Auto ETF Scanner", layout="wide")
-
-st.title("📊 Breakout Auto ETF Scanner (YFinance Edition)")
-st.write("วิเคราะห์แนวโน้มตลาดและสัญญาณซื้อ/ขายอัตโนมัติสำหรับกลุ่ม ETF ที่เลือก โดยอ้างอิงข้อมูลราคาย้อนหลังจาก Yahoo Finance")
-
-# ส่วนเลือก Market Filter ETF (เช่น SPY หรือ QQQ)
-market_choices = ["SPY", "QQQ"]
-market_ticker = st.selectbox("เลือก ETF หลักสำหรับ Market Filter:", market_choices, index=0)
-# ดึงและวิเคราะห์ข้อมูลของ ETF หลัก (market)
-market_df = analyze_ticker(market_ticker)
-market_status = evaluate_market(market_df)
-
-# แสดงสถานะตลาด
-st.subheader(f"Market Status ({market_ticker}): **{market_status}**")
-# เพิ่มการเน้นสีตามสถานะเพื่อความชัดเจน
-if market_status == "Bullish":
-    st.success(f"Market is {market_status}")
-elif market_status == "Bearish":
-    st.error(f"Market is {market_status}")
-else:
-    st.info(f"Market is {market_status}")
-
-# ส่วนกรอกชื่อย่อ ETF ที่ต้องการสแกน
-default_list = "YINN, SOXL, FNGU, FXI"
-tickers_input = st.text_input(
-    "ใส่รายชื่อ ETF ที่ต้องการสแกน (คั่นด้วยเครื่องหมายจุลภาค):",
-    default_list
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from breakout_scanner import (
+    fetch_etf_data,
+    calculate_technical_indicators,
+    generate_signals,
+    assess_market_condition,
 )
-# แปลง input string เป็น list และลบช่องว่างเกินจำเป็น
-tickers_list = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
 
-# ตรวจสอบว่ามี tickers ให้วิเคราะห์
-if len(tickers_list) == 0:
-    st.warning("กรุณาระบุรายชื่อ ETF อย่างน้อย 1 ตัวเพื่อสแกน")
+st.set_page_config(page_title="Breakout Auto ETF Scanner", layout="wide")
+st.title("📈 Breakout Auto ETF Scanner (YFinance Edition)")
+st.caption("Powered by มาบอย 🐃🔥")
+
+# ─── Sidebar: Market Filter ──────────────────────────
+st.sidebar.subheader("☁️ ใช้ Market Filter จาก ETF")
+market_choice = st.sidebar.selectbox("เลือก ETF ตลาด", ["SPY", "QQQ"])
+
+with st.sidebar.status("กำลังโหลดข้อมูลตลาด..."):
+    market_df = fetch_etf_data(market_choice)
+    if market_df.empty:
+        market_status = "Unknown"
+        st.sidebar.error(f"⚠️ โหลดข้อมูล {market_choice} ไม่สำเร็จ")
+    else:
+        try:
+            market_df = calculate_technical_indicators(market_df)
+            market_status = assess_market_condition(market_df)
+        except Exception as e:
+            market_status = "Unknown"
+            st.sidebar.error(f"⚠️ ประเมินตลาดไม่ได้: {str(e)}")
+
+if market_status == "Bullish":
+    st.sidebar.success(f"**Market Status ({market_choice}):** `{market_status}` 🟢")
+elif market_status == "Neutral":
+    st.sidebar.warning(f"**Market Status ({market_choice}):** `{market_status}` 🟡")
+elif market_status == "Bearish":
+    st.sidebar.error(f"**Market Status ({market_choice}):** `{market_status}` 🔴")
 else:
-    # ดึงข้อมูลและวิเคราะห์สำหรับทุก ticker ในรายการ
-    results = {}  # เก็บ DataFrame ของแต่ละ ticker
-    for tic in tickers_list:
-        df = analyze_ticker(tic)
-        if df is None:
-            st.error(f"ไม่สามารถดึงข้อมูล {tic} ได้")
-        else:
-            results[tic] = df
+    st.sidebar.info(f"**Market Status ({market_choice}):** `{market_status}` ⚪")
 
-    if results:
-        # สรุปสัญญาณล่าสุดของแต่ละ ETF
-        summary_data = {
-            "Ticker": [],
-            "Last Price": [],
-            "Signal (Latest)": []
-        }
-        for tic, df in results.items():
-            summary_data["Ticker"].append(tic)
-            summary_data["Last Price"].append(round(df["Close"].iloc[-1], 2))
-            summary_data["Signal (Latest)"].append(df["Signal"].iloc[-1])
-        summary_df = (
-            pd.DataFrame(summary_data)
-            .set_index("Ticker")
-            .sort_index()
-        )
-        st.subheader("🔎 Latest Signals Summary")
-        st.dataframe(summary_df)
+# ─── Main: ETF Scanner ────────────────────────────────
+st.subheader("เลือก ETF ที่ต้องการสแกน")
+ticker_list = ["YINN", "FNGU", "SOXL", "FXI", "EURL", "TNA", "GDXU"]
+selected_etf = st.selectbox("ETF Scanner", ticker_list)
 
-        # แสดงข้อมูลย้อนหลังและสัญญาณของแต่ละ ETF
-        for tic, df in results.items():
-            st.subheader(f"ETF: {tic} – Recent Data & Indicators")
-            # แสดง 10 แถวสุดท้ายของข้อมูลรวมอินดิเคเตอร์และสัญญาณ
-            st.dataframe(df.tail(10))
+with st.status("📥 กำลังโหลดข้อมูล ETF..."):
+    df = fetch_etf_data(selected_etf)
+    if df.empty:
+        st.error(f"❌ โหลดข้อมูล {selected_etf} ไม่สำเร็จ")
+        st.stop()
+    try:
+        df = calculate_technical_indicators(df)
+        df = generate_signals(df, market_status)
+        df.dropna(inplace=True)
+    except Exception as e:
+        st.error(f"❌ เกิดข้อผิดพลาดในการประมวลผล: {str(e)}")
+        st.stop()
+
+# ─── Signal Section ───────────────────────────────────
+latest_ts = df.index[-1]
+latest = df.iloc[-1]
+date_str = latest_ts.date().isoformat()
+signal = latest.get("Signal", "HOLD")
+rsi_val = latest.get("Rsi", 0)
+macd_val = latest.get("Macd", 0)
+ema20_val = latest.get("Ema20", 0)
+
+st.markdown(f"### 🧠 สัญญาณล่าสุด: `{selected_etf}`")
+st.markdown(f"- 📅 วันที่: `{date_str}`")
+
+if signal == "BUY":
+    st.success(f"- 📊 สัญญาณ: **{signal}** 🟢")
+elif signal == "SELL":
+    st.error(f"- 📊 สัญญาณ: **{signal}** 🔴")
+else:
+    st.info(f"- 📊 สัญญาณ: **{signal}** ⚪")
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.markdown(f"- RSI: `{rsi_val:.2f}`")
+with col2:
+    st.markdown(f"- MACD: `{macd_val:.2f}`")
+with col3:
+    st.markdown(f"- EMA20: `{ema20_val:.2f}`")
+
+# ─── Graph Section ────────────────────────────────────
+st.subheader("📊 กราฟราคาและตัวชี้วัด")
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                    vertical_spacing=0.05, row_heights=[0.7, 0.3])
+
+fig.add_trace(go.Scatter(x=df.index, y=df["Close"], name="ราคาปิด",
+                         line=dict(color='royalblue')), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df["Ema20"], name="EMA20",
+                         line=dict(color='orange')), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df["Rsi"], name="RSI",
+                         line=dict(color='purple')), row=2, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=[70]*len(df), name="Overbought",
+                         line=dict(color='red', dash='dash')), row=2, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=[30]*len(df), name="Oversold",
+                         line=dict(color='green', dash='dash')), row=2, col=1)
+
+buy_signals = df[df["Signal"] == "BUY"]
+sell_signals = df[df["Signal"] == "SELL"]
+
+fig.add_trace(go.Scatter(x=buy_signals.index, y=buy_signals["Close"], name="Buy",
+                         mode="markers", marker=dict(color="green", size=10, symbol="triangle-up")), row=1, col=1)
+fig.add_trace(go.Scatter(x=sell_signals.index, y=sell_signals["Close"], name="Sell",
+                         mode="markers", marker=dict(color="red", size=10, symbol="triangle-down")), row=1, col=1)
+
+fig.update_layout(height=600, title_text=f"{selected_etf} - ราคาและตัวชี้วัด")
+st.plotly_chart(fig, use_container_width=True)
+
+with st.expander("🔍 ข้อมูลย้อนหลัง"):
+    st.dataframe(df.tail(30)[["Close", "Ema20", "Rsi", "Macd", "Signal"]], use_container_width=True)
