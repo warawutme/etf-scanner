@@ -26,7 +26,7 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if "Close" not in df.columns:
         print("❌ ไม่พบคอลัมน์ 'Close'")
         print("คอลัมน์ทั้งหมด:", df.columns.tolist())
-        return df
+        return pd.DataFrame()
 
     # แปลง df["Close"] ให้เป็น Series ที่ถูกต้อง
     try:
@@ -36,6 +36,10 @@ def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
         df["Close"] = pd.to_numeric(close_col.values, errors="coerce")
     except Exception as e:
         print("❌ แปลง 'Close' ไม่ได้:", e)
+        return pd.DataFrame()
+
+    if "Close" not in df.columns:
+        print("❌ ยังไม่มีคอลัมน์ Close หลังแปลง")
         return pd.DataFrame()
 
     df = df.dropna(subset=["Close"]).copy()
@@ -123,4 +127,3 @@ def generate_signals(df: pd.DataFrame, market_status: str = "Bullish") -> pd.Dat
     df_merged["Signal"] = "HOLD"
     df_merged.update(df_clean[["Signal"]])
     return df_merged
-
